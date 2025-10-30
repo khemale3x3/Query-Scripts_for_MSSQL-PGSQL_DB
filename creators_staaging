@@ -1,0 +1,108 @@
+-- Create database
+CREATE DATABASE influencer_data;
+
+
+
+-- Create table with all columns
+CREATE TABLE influencer_staging (
+    -- Audit timestamp
+    staging_timestamp TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+
+    -- Basic information
+    email TEXT,
+    primary_social_link TEXT,
+    username TEXT,
+    first_name TEXT,
+    last_name TEXT,
+    full_name TEXT,
+    phone_number TEXT,
+    profile_picture TEXT,
+    age NUMERIC(4,1),
+    age_group TEXT,
+    gender TEXT,
+
+    -- Address information
+    street_address TEXT,
+    address_city TEXT,
+    address_state TEXT,
+    address_zip TEXT,
+    address_country TEXT,
+    latitude NUMERIC(8,5),
+    longitude NUMERIC(8,5),
+    full_address TEXT,
+
+    -- Professional details
+    niche TEXT,
+    niche_primary TEXT,
+    niche_secondary TEXT,
+    business_category TEXT,
+    creator_type TEXT,
+    tier TEXT,
+    creator_size TEXT,
+    follower_count BIGINT,
+    bio_data TEXT,
+    category_id TEXT, -- Category ID from veel
+    status TEXT,
+    profile_completion_status NUMERIC(8,5),
+
+    -- Social media links
+    tiktok_link TEXT,
+    youtube_link TEXT,
+    facebook_link TEXT,
+    pinterest_link TEXT,
+    linktree_link TEXT,
+    other_social_media TEXT,
+    platform_profile_link TEXT, -- Link to the influencer's profile on the platform eg:mod
+
+    -- Collaboration details
+    collaboration_status TEXT,
+    top_collaboration TEXT,
+    top_collaboration_brand_logo TEXT,
+    total_collaboration INTEGER,
+    no_of_collaboration_3_months INTEGER,
+    ugc_video_example TEXT,
+
+    -- Content metrics
+    hashtags TEXT,
+    mention TEXT,
+    time_15_seconds INTEGER,
+    time_30_seconds INTEGER,
+    time_60_seconds INTEGER,
+    time_1_to_5_minutes INTEGER,
+    time_greater_than_5_minutes INTEGER,
+
+    -- Engagement metrics
+    post1_engagement INTEGER,
+    post2_engagement INTEGER,
+    post3_engagement INTEGER,
+    post4_engagement INTEGER,
+    post5_engagement INTEGER,
+    post6_engagement INTEGER,
+    total_posts_last_3_months INTEGER,
+    er_percentage NUMERIC(5,2),
+    er_points_3_months NUMERIC(5,2),
+
+    -- Scoring system
+    follower_points INTEGER,
+    collaboration_points INTEGER,
+    niche_point INTEGER,
+    posting_frequency_points INTEGER,
+    short_form_video_platform_point INTEGER,
+    total_points INTEGER,
+    score_tier TEXT,
+
+    -- Financial information
+    price_usd NUMERIC(10,2),
+    estimated_roi NUMERIC(5,2),
+    price_range TEXT,
+
+
+    -- Additional metadata
+    impressions_visibility TEXT,
+    source TEXT,
+    last_updated DATE,
+    notes TEXT,
+
+    -- JSON for flexible data storage
+    extra_data JSONB
+);

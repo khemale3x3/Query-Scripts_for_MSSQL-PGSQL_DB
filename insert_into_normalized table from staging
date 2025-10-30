@@ -1,0 +1,270 @@
+-- Create a temporary table to get the latest staging data for each username
+CREATE TEMP TABLE latest_staging AS
+SELECT *
+FROM influencer_staging
+WHERE staging_timestamp IS NOT NULL
+ORDER BY username, staging_timestamp DESC;
+
+
+-- Step 1: Upsert into creators_info based on username
+INSERT INTO public.creators_info (
+    creator_id, 
+    email, 
+    username, 
+    first_name, 
+    last_name, 
+    full_name, 
+    phone_number, 
+    staging_timestamp, 
+    is_veel_creator
+)
+SELECT
+    gen_random_uuid(), 
+    email, 
+    username, 
+    first_name, 
+    last_name, 
+    -- Handle cases where full_name is NULL
+    CASE 
+        WHEN full_name IS NOT NULL THEN full_name
+        WHEN first_name IS NOT NULL AND last_name IS NOT NULL THEN first_name || ' ' || last_name
+        WHEN first_name IS NOT NULL THEN first_name
+        WHEN last_name IS NOT NULL THEN last_name
+        ELSE username
+    END AS full_name,
+    phone_number,
+    staging_timestamp,
+    CASE WHEN is_veel_creator = 1 THEN TRUE ELSE FALSE END
+FROM influencer_staging
+ON CONFLICT (username) 
+DO UPDATE SET
+    email = EXCLUDED.email,
+    first_name = EXCLUDED.first_name,
+    last_name = EXCLUDED.last_name,
+    full_name = EXCLUDED.full_name,
+    phone_number = EXCLUDED.phone_number,
+    staging_timestamp = EXCLUDED.staging_timestamp,
+    is_veel_creator = EXCLUDED.is_veel_creator;
+
+-- Step 2: Upsert into creator_profiles
+WITH cid AS (
+    SELECT creator_id, username FROM creators_info
+)
+INSERT INTO public.creator_profiles (
+    creator_id, age_group, age, gender, creator_size, business_category,
+    bio_data, address_city, address_state, address_country, address_zip,
+    latitude, longitude, street_address, full_address, profile_completion_status,
+    category_id, status, last_updated
+)
+SELECT
+    cid.creator_id, 
+    s.age_group, 
+    s.age, 
+    s.gender, 
+    s.creator_size, 
+    s.business_category,
+    s.bio_data, 
+    s.address_city, 
+    s.address_state, 
+    s.address_country, 
+    s.address_zip,
+    s.latitude, 
+    s.longitude, 
+    s.street_address,
+    s.full_address,
+    s.profile_completion_status,
+    s.category_id,
+    s.status,
+    s.last_updated
+FROM influencer_staging s
+JOIN cid ON cid.username = s.username
+ON CONFLICT (creator_id) DO UPDATE SET
+    age_group = EXCLUDED.age_group,
+    age = EXCLUDED.age,
+    gender = EXCLUDED.gender,
+    creator_size = EXCLUDED.creator_size,
+    business_category = EXCLUDED.business_category,
+    bio_data = EXCLUDED.bio_data,
+    address_city = EXCLUDED.address_city,
+    address_state = EXCLUDED.address_state,
+    address_country = EXCLUDED.address_country,
+    address_zip = EXCLUDED.address_zip,
+    latitude = EXCLUDED.latitude,
+    longitude = EXCLUDED.longitude,
+    street_address = EXCLUDED.street_address,
+    full_address = EXCLUDED.full_address,
+    profile_completion_status = EXCLUDED.profile_completion_status,
+    category_id = EXCLUDED.category_id,
+    status = EXCLUDED.status,
+    last_updated = EXCLUDED.last_updated,
+    updated_at = CURRENT_TIMESTAMP;
+
+-- Step 3: Upsert into creator_social_links
+WITH cid AS (
+    SELECT creator_id, username FROM creators_info
+)
+INSERT INTO public.creator_social_links (
+    creator_id, primary_social_link, tiktok_link, youtube_link,
+    facebook_link, pinterest_link, linktree_link,
+    other_social_media, platform_profile_link, profile_picture
+)
+SELECT
+    cid.creator_id, 
+    s.primary_social_link, 
+    s.tiktok_link, 
+    s.youtube_link,
+    s.facebook_link, 
+    s.pinterest_link, 
+    s.linktree_link,
+    s.other_social_media, 
+    s.platform_profile_link, 
+    s.profile_picture
+FROM influencer_staging s
+JOIN cid ON cid.username = s.username
+ON CONFLICT (creator_id) DO UPDATE SET
+    primary_social_link = EXCLUDED.primary_social_link,
+    tiktok_link = EXCLUDED.tiktok_link,
+    youtube_link = EXCLUDED.youtube_link,
+    facebook_link = EXCLUDED.facebook_link,
+    pinterest_link = EXCLUDED.pinterest_link,
+    linktree_link = EXCLUDED.linktree_link,
+    other_social_media = EXCLUDED.other_social_media,
+    platform_profile_link = EXCLUDED.platform_profile_link,
+    profile_picture = EXCLUDED.profile_picture,
+    updated_at = CURRENT_TIMESTAMP;
+
+-- Step 4: Upsert into creator_pricing
+WITH cid AS (
+    SELECT creator_id, username FROM creators_info
+)
+INSERT INTO public.creator_pricing (
+    creator_id, tier, price_usd, price_range, time_15_seconds, time_30_seconds,
+    time_60_seconds, time_1_to_5_minutes, time_greater_than_5_minutes,
+    estimated_roi
+)
+SELECT
+    cid.creator_id, 
+    s.tier, 
+    s.price_usd,
+    s.price_range,
+    s.time_15_seconds, 
+    s.time_30_seconds,
+    s.time_60_seconds, 
+    s.time_1_to_5_minutes, 
+    s.time_greater_than_5_minutes,
+    s.estimated_roi
+FROM influencer_staging s
+JOIN cid ON cid.username = s.username
+ON CONFLICT (creator_id) DO UPDATE SET
+    tier = EXCLUDED.tier,
+    price_usd = EXCLUDED.price_usd,
+    price_range = EXCLUDED.price_range,
+    time_15_seconds = EXCLUDED.time_15_seconds,
+    time_30_seconds = EXCLUDED.time_30_seconds,
+    time_60_seconds = EXCLUDED.time_60_seconds,
+    time_1_to_5_minutes = EXCLUDED.time_1_to_5_minutes,
+    time_greater_than_5_minutes = EXCLUDED.time_greater_than_5_minutes,
+    estimated_roi = EXCLUDED.estimated_roi,
+    updated_at = CURRENT_TIMESTAMP;
+
+
+-- Step 5: Upsert into creator_engagement
+WITH cid AS (
+    SELECT creator_id, username FROM creators_info
+)
+INSERT INTO public.creator_engagement (
+    creator_id, follower_count, impressions_visibility, last_updated,
+    post1_engagement, post2_engagement, post3_engagement, post4_engagement,
+    post5_engagement, post6_engagement, total_posts_last_3_months
+)
+SELECT
+    cid.creator_id, 
+    s.follower_count::bigint, 
+    s.impressions_visibility, 
+    s.last_updated,
+    s.post1_engagement, 
+    s.post2_engagement, 
+    s.post3_engagement, 
+    s.post4_engagement,
+    s.post5_engagement, 
+    s.post6_engagement, 
+    s.total_posts_last_3_months
+FROM influe_staging s
+JOIN cid ON cid.username = s.username
+ON CONFLICT (creator_id) DO UPDATE SET
+    follower_count = EXCLUDED.follower_count,
+    impressions_visibility = EXCLUDED.impressions_visibility,
+    last_updated = EXCLUDED.last_updated,
+    post1_engagement = EXCLUDED.post1_engagement,
+    post2_engagement = EXCLUDED.post2_engagement,
+    post3_engagement = EXCLUDED.post3_engagement,
+    post4_engagement = EXCLUDED.post4_engagement,
+    post5_engagement = EXCLUDED.post5_engagement,
+    post6_engagement = EXCLUDED.post6_engagement,
+    total_posts_last_3_months = EXCLUDED.total_posts_last_3_months,
+    updated_at = CURRENT_TIMESTAMP;
+
+
+-- Step 6: Upsert into creator_collaborations
+WITH cid AS (
+    SELECT creator_id, username FROM creators_info
+)
+INSERT INTO public.creator_collaborations (
+    creator_id, collaboration_status, top_collaboration,
+    top_collaboration_brand_logo, total_collaboration, 
+    no_of_collaboration_3_months, ugc_video_example, hashtags, mention
+)
+SELECT
+    cid.creator_id, 
+    s.collaboration_status, 
+    s.top_collaboration,
+    s.top_collaboration_brand_logo, 
+    s.total_collaboration, 
+    s.no_of_collaboration_3_months, 
+    s.ugc_video_example, 
+    s.hashtags, 
+    s.mention
+FROM latest_staging s
+JOIN cid ON cid.username = s.username
+ON CONFLICT (creator_id) DO UPDATE SET
+    collaboration_status = EXCLUDED.collaboration_status,
+    top_collaboration = EXCLUDED.top_collaboration,
+    top_collaboration_brand_logo = EXCLUDED.top_collaboration_brand_logo,
+    total_collaboration = EXCLUDED.total_collaboration,
+    no_of_collaboration_3_months = EXCLUDED.no_of_collaboration_3_months,
+    ugc_video_example = EXCLUDED.ugc_video_example,
+    hashtags = EXCLUDED.hashtags,
+    mention = EXCLUDED.mention,
+    updated_at = CURRENT_TIMESTAMP;
+
+-- Step 7: Upsert into creator_metadata
+WITH cid AS (
+    SELECT creator_id, username FROM creators_info
+)
+INSERT INTO public.creator_metadata (
+    creator_id, creator_type, niche, niche_primary, niche_secondary,
+    source, notes, extra_data
+)
+SELECT
+    cid.creator_id, 
+    s.creator_type, 
+    s.niche,
+    s.niche_primary, 
+    s.niche_secondary,
+    s.source, 
+    s.notes, 
+    s.extra_data
+FROM latest_staging s
+JOIN cid ON cid.username = s.username
+ON CONFLICT (creator_id) DO UPDATE SET
+    creator_type = EXCLUDED.creator_type,
+    niche = EXCLUDED.niche,
+    niche_primary = EXCLUDED.niche_primary,
+    niche_secondary = EXCLUDED.niche_secondary,
+    source = EXCLUDED.source,
+    notes = EXCLUDED.notes,
+    extra_data = EXCLUDED.extra_data,
+    updated_at = CURRENT_TIMESTAMP;
+
+-- Drop the temporary table
+DROP TABLE latest_staging;
