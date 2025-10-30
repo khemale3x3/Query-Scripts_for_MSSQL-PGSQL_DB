@@ -1,0 +1,216 @@
+import pandas as pd
+import pyodbc
+from datetime import datetime
+import time
+
+# --- Helper functions to safely convert data types (No changes here) ---
+
+def safe_to_int(value):
+    """Converts a value to an integer, returning None if conversion fails."""
+    if value is None or pd.isna(value) or value == '':
+        return None
+    try:
+        return int(float(value))
+    except (ValueError, TypeError):
+        return None
+
+def safe_to_float(value):
+    """Converts a value to a float, returning None if conversion fails."""
+    if value is None or pd.isna(value) or value == '':
+        return None
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return None
+        
+def safe_to_date(value):
+    """Converts a value to a date string, returning None if conversion fails."""
+    if value is None or pd.isna(value) or value == '':
+        return None
+    try:
+        return pd.to_datetime(value).strftime('%Y-%m-%d')
+    except (ValueError, TypeError):
+        return None
+
+# --- Main Script ---
+
+def connect_sql_server(server="servername ", database="DBname", user="username", password="passcode"):
+    """Establishes a connection to the SQL Server database."""
+    try:
+        conn_str = (
+            "DRIVER={ODBC Driver 17 for SQL Server};"
+            f"SERVER={server};"
+            f"DATABASE={database};"
+            f"UID={user};"
+            f"PWD={password};"
+            "TrustServerCertificate=yes;"
+        )
+        conn = pyodbc.connect(conn_str)
+        cursor = conn.cursor()
+        print("✅ Connected to SQL Server")
+        return conn, cursor
+    except Exception as e:
+        print(f"❌ Connection error: {e}")
+        return None, None
+
+def fast_import_influencer_data():
+    """Loads influencer data and uses a fast bulk-insert/update method."""
+    start_time = time.time()
+    
+    # --- Step 1: Connect and load CSV (same as before) ---
+    csv_path = r"input----file---path--here"
+    conn, cursor = connect_sql_server()
+    if not conn:
+        return
+
+    try:
+        df = pd.read_csv(csv_path, dtype=str, keep_default_na=False)
+        df.columns = [col.strip().lower() for col in df.columns]
+        print(f"📄 Found {len(df)} records in the CSV file.")
+    except FileNotFoundError:
+        print(f"❌ Error: CSV file not found at {csv_path}")
+        return
+
+    # --- Step 2: Load existing rows from DB into memory for fast compare ---
+    db_columns = [
+        'email', 'primary_social_link', 'username', 'first_name', 'last_name', 'creator_type',
+        'address_city', 'address_state', 'address_country', 'address_zip', 'collaboration_status',
+        'top_collaboration', 'top_collaboration_brand_logo', 'hashtags','niche','full_name', 'niche_primary', 'niche_secondary',
+        'follower_count', 'creator_size', 'age_group', 'age', 'gender', 'phone_number', 'profile_picture',
+        'tiktok_link', 'youtube_link', 'facebook_link', 'linktree_link', 'other_social_media', 'business_category',
+        'mention', 'latitude', 'longitude', 'street_address', 'bio_data', 'last_updated', 'source',
+        'total_posts_last_3_months', 'er_percentage', 'total_collaboration',
+        'ugc_video_example', 'tier', 'price_usd', 'time_15_seconds', 'time_30_seconds', 'time_60_seconds',
+        'time_1_to_5_minutes', 'time_greater_than_5_minutes', 'latest_post_link', 'latest_post_date',
+        'estimated_roi', 'impressions_visibility', 'scraped_date', 'analyzed_date',
+        'post1_engagement', 'post2_engagement', 'post3_engagement',
+        'post4_engagement', 'post5_engagement', 'post6_engagement'
+    ]
+
+    print("🔍 Fetching existing records from the database...")
+    try:
+        select_sql = f"SELECT {', '.join(db_columns)} FROM dbo.influencer_staging"
+        cursor.execute(select_sql)
+        rows = cursor.fetchall()
+        existing_data = {}
+        for r in rows:
+            # r is ordered as db_columns
+            row_map = dict(zip(db_columns, r))
+            username_key = (row_map.get('username') or '').strip().lower()
+            if username_key:
+                existing_data[username_key] = row_map
+        print(f"   Found {len(existing_data)} existing records.")
+    except pyodbc.ProgrammingError as e:
+        print(f"❌ Error fetching existing records. Please check table/column names. Details: {e}")
+        conn.close()
+        return
+
+    # helper to build DB-valued tuple from CSV row dict (same column order as db_columns)
+    def build_db_values(row_dict):
+        return (
+            row_dict.get('email'), row_dict.get('primary_social_link'), row_dict.get('username'), row_dict.get('first_name'),
+            row_dict.get('last_name'), row_dict.get('creator_type'), row_dict.get('address_city'), row_dict.get('address_state'),
+            row_dict.get('address_country'), row_dict.get('address_zip'), row_dict.get('collaboration_status'),
+            row_dict.get('top_collaboration'), row_dict.get('top_collaboration_brand_logo'), row_dict.get('hashtags'),
+            row_dict.get('niche'), row_dict.get('full_name'), row_dict.get('niche_primary'), row_dict.get('niche_secondary'),
+            safe_to_int(row_dict.get('follower_count')),
+            row_dict.get('creator_size'), row_dict.get('age_group'), safe_to_int(row_dict.get('age')), row_dict.get('gender'),
+            row_dict.get('phone_number'), row_dict.get('profile_picture'), row_dict.get('tiktok_link'), row_dict.get('youtube_link'),
+            row_dict.get('facebook_link'), row_dict.get('linktree_link'), row_dict.get('other_social_media'),
+            row_dict.get('business_category'), row_dict.get('mention'), safe_to_float(row_dict.get('latitude')),
+            safe_to_float(row_dict.get('longitude')), row_dict.get('street_address'), row_dict.get('bio_data'),
+            safe_to_date(row_dict.get('last_updated')), row_dict.get('source'),
+            safe_to_int(row_dict.get('total_posts_last_3_months')), safe_to_float(row_dict.get('er_percentage')),
+            safe_to_int(row_dict.get('total_collaboration')),
+            row_dict.get('ugc_video_example'), row_dict.get('tier'), row_dict.get('price_usd'), safe_to_float(row_dict.get('time_15_seconds')),
+            safe_to_float(row_dict.get('time_30_seconds')), safe_to_float(row_dict.get('time_60_seconds')),
+            safe_to_float(row_dict.get('time_1_to_5_minutes')), safe_to_float(row_dict.get('time_greater_than_5_minutes')),
+            row_dict.get('latest_post_link'), row_dict.get('latest_post_date'), row_dict.get('estimated_roi'),
+            row_dict.get('impressions_visibility'), row_dict.get('scraped_date'), row_dict.get('analyzed_date'),
+            safe_to_int(row_dict.get('post1_engagement')), safe_to_int(row_dict.get('post2_engagement')),
+            safe_to_int(row_dict.get('post3_engagement')), safe_to_int(row_dict.get('post4_engagement')),
+            safe_to_int(row_dict.get('post5_engagement')), safe_to_int(row_dict.get('post6_engagement'))
+        )
+
+    records_to_insert = []
+    records_to_update = []
+    original_row_count = len(df)
+    skipped_no_username = 0
+
+    # Iterate all rows and decide insert vs update
+    for row in df.itertuples(index=False):
+        row_dict = {df.columns[i]: val for i, val in enumerate(row)}
+        username = (row_dict.get('username') or '').strip()
+        if not username:
+            skipped_no_username += 1
+            continue
+        username_key = username.lower()
+
+        new_values = build_db_values(row_dict)  # tuple aligned with db_columns
+        # compare to existing record (if any)
+        existing = existing_data.get(username_key)
+        if existing is None:
+            # new record -> insert
+            records_to_insert.append(new_values)
+        else:
+            # build a comparable tuple from existing row in same order
+            # existing dict values might be native types; cast both to string for stable comparison
+            changed = False
+            for i, col in enumerate(db_columns):
+                existing_val = existing.get(col)
+                new_val = new_values[i]
+                # Normalize None/NaN and booleans/numbers to string for comparison
+                if existing_val is None and (new_val is None or (isinstance(new_val, float) and pd.isna(new_val))):
+                    continue
+                if str(existing_val) != str(new_val):
+                    changed = True
+                    break
+            if changed:
+                # Prepare update tuple: all columns except username, then username for WHERE
+                update_values = [v for i, v in enumerate(new_values) if db_columns[i] != 'username']
+                update_values.append(username)  # WHERE username=?
+                records_to_update.append(tuple(update_values))
+
+    # --- Perform inserts ---
+    if records_to_insert:
+        print(f"🚀 Inserting {len(records_to_insert)} new records into the database...")
+        insert_placeholders = ", ".join(["?"] * len(db_columns))
+        insert_sql = f"INSERT INTO dbo.influencer_staging ({', '.join(db_columns)}) VALUES ({insert_placeholders})"
+        try:
+            cursor.fast_executemany = True
+            cursor.executemany(insert_sql, records_to_insert)
+            conn.commit()
+        except Exception as e:
+            print(f"❌ Insert error: {e}")
+            conn.rollback()
+
+    # --- Perform updates ---
+    if records_to_update:
+        print(f"🔁 Updating {len(records_to_update)} changed records in the database...")
+        set_cols = [col for col in db_columns if col != 'username']
+        update_sql = f"UPDATE dbo.influencer_staging SET {', '.join([col + '=?' for col in set_cols])} WHERE username = ?"
+        try:
+            cursor.fast_executemany = True
+            cursor.executemany(update_sql, records_to_update)
+            conn.commit()
+        except Exception as e:
+            print(f"❌ Update error: {e}")
+            conn.rollback()
+
+    cursor.close()
+    conn.close()
+
+    end_time = time.time()
+    inserted = len(records_to_insert)
+    updated = len(records_to_update)
+    print("\n-------------------------------------------")
+    print(f"✅ Import completed in {end_time - start_time:.2f} seconds.")
+    print(f"   New Records Inserted: {inserted}")
+    print(f"   Existing Records Updated: {updated}")
+    print(f"   Rows Skipped (no username): {skipped_no_username}")
+    print(f"   Existing Records Unchanged: {original_row_count - inserted - updated - skipped_no_username}")
+    print("-------------------------------------------")
+
+# Run the main import function
+if __name__ == "__main__":
+    fast_import_influencer_data()
