@@ -1,0 +1,312 @@
+import pandas as pd
+import pyodbc
+import time
+import re
+
+# --- Helper functions to safely convert data types ---
+
+def safe_to_int(value):
+    """Converts a value to an integer, returning None if conversion fails."""
+    if value is None or pd.isna(value) or value == '':
+        return None
+    try:
+        return int(float(value))
+    except (ValueError, TypeError):
+        return None
+
+def safe_to_float(value):
+    """Converts a value to a float, returning None if conversion fails."""
+    if value is None or pd.isna(value) or value == '':
+        return None
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return None
+        
+def safe_to_date(value):
+    """Converts a value to a date string, returning None if conversion fails."""
+    if value is None or pd.isna(value) or value == '':
+        return None
+    try:
+        return pd.to_datetime(value).strftime('%Y-%m-%d')
+    except (ValueError, TypeError):
+        return None
+
+def clean_column_name(name):
+    """Clean column names by converting to lowercase and replacing special characters"""
+    if pd.isna(name):
+        return ''
+    # Convert to lowercase
+    name = str(name).lower()
+    # Replace spaces and special characters with underscores
+    name = re.sub(r'[^a-z0-9]+', '_', name)
+    # Remove leading and trailing underscores
+    name = name.strip('_')
+    return name
+
+# --- Main Script ---
+
+def connect_sql_server(server="yourserver address", database="yourDbname", user="username", password="passcode"):
+    """Establishes a connection to the SQL Server database."""
+    try:
+        conn_str = (
+            "DRIVER={ODBC Driver 17 for SQL Server};"
+            f"SERVER={server};"
+            f"DATABASE={database};"
+            f"UID={user};"
+            f"PWD={password};"
+            "TrustServerCertificate=yes;"
+        )
+        conn = pyodbc.connect(conn_str)
+        cursor = conn.cursor()
+        print("✅ Connected to SQL Server")
+        return conn, cursor
+    except Exception as e:
+        print(f"❌ Connection error: {e}")
+        return None, None
+
+def fast_import_brand_data():
+    """Loads brand data and uses a fast bulk-insert/update method."""
+    start_time = time.time()
+    
+    # --- Step 1: Connect and load CSV ---
+    csv_path = r"\apparel&fashionusbased ' - apparel&fashionusbased '.csv"
+    conn, cursor = connect_sql_server()
+    if not conn:
+        return
+
+    try:
+        df = pd.read_csv(csv_path, dtype=str, keep_default_na=False)
+        # Clean column names
+        df.columns = [clean_column_name(col) for col in df.columns]
+        print(f"📄 Found {len(df)} records in the CSV file.")
+    except FileNotFoundError:
+        print(f"❌ Error: CSV file not found at {csv_path}")
+        return
+
+    # --- Step 2: Load existing rows from DB into memory for fast compare ---
+    db_columns = [
+        'company', 'company_name_for_emails', 'first_name', 'last_name', 'seniority',
+        'departments', 'title', 'email', 'secondary_email', 'email_from_website',
+        'industry', 'industry_corrected', 'employees', 'work_direct_phone', 'home_phone',
+        'mobile_phone', 'corporate_phone', 'company_phone', 'phone_from_website',
+        'other_phone', 'website', 'instagram_url', 'company_linkedin_url',
+        'person_linkedin_url', 'facebook_url', 'twitter_url', 'pinterest_url', 'city',
+        'state', 'country', 'company_city', 'company_state', 'company_country',
+        'company_address', 'technologies', 'keywords', 'annual_revenue', 'total_funding',
+        'latest_funding', 'latest_funding_amount', 'subsidiary_of',
+        'number_of_retail_locations', 'extracted_from', 'website_status', 'd2c_presence',
+        'e_commerce_presence', 'social_media_presence', 'integrated_videos',
+        'integrated_video_urls', 'job_tracking_link', 'hiring_job_title',
+        'salary_estimated', 'job_location', 'linkedin_job_link', 'linkedin_job_title',
+        'job_basedon', 'ig_username', 'ig_bio', 'ig_followers_count',
+        'total_post_in_3_months', 'average_er', 'total_collaborations', 'ugc_example',
+        'worked_with_creators', 'hashtags', 'mentions', 'post1_engagement',
+        'post2_engagement', 'post3_engagement', 'post4_engagement', 'post5_engagement',
+        'post6_engagement', 'segmentation', 'firmographic_score', 'engagement_score',
+        'mql', 'sql', 'ig_score', 'ad_library_proof', 'notes_for_sdr', 'notes_for_data',
+        'date_of_filtration','LogoUrl','short_description'
+    ]
+
+    print("🔍 Fetching existing records from the database...")
+    try:
+        select_sql = f"SELECT {', '.join(db_columns)} FROM dbo.brand_staging"
+        cursor.execute(select_sql)
+        rows = cursor.fetchall()
+        existing_data = {}
+        for r in rows:
+            # r is ordered as db_columns
+            row_map = dict(zip(db_columns, r))
+            email_key = (row_map.get('email') or '').strip().lower()
+            company_key = (row_map.get('company') or '').strip().lower()
+            # Use email + company as composite key for better uniqueness
+            composite_key = f"{email_key}_{company_key}"
+            if composite_key:
+                existing_data[composite_key] = row_map
+        print(f"   Found {len(existing_data)} existing records.")
+    except pyodbc.ProgrammingError as e:
+        print(f"❌ Error fetching existing records. Please check table/column names. Details: {e}")
+        conn.close()
+        return
+
+    # Helper to build DB-valued tuple from CSV row dict (same column order as db_columns)
+    def build_db_values(row_dict):
+        return (
+            row_dict.get('company'), row_dict.get('company_name_for_emails'), row_dict.get('first_name'), 
+            row_dict.get('last_name'), row_dict.get('seniority'), row_dict.get('departments'), 
+            row_dict.get('title'), row_dict.get('email'), row_dict.get('secondary_email'), 
+            row_dict.get('email_from_website'), row_dict.get('industry'), row_dict.get('industry_corrected'), 
+            safe_to_int(row_dict.get('employees')), row_dict.get('work_direct_phone'), 
+            row_dict.get('home_phone'), row_dict.get('mobile_phone'), row_dict.get('corporate_phone'), 
+            row_dict.get('company_phone'), row_dict.get('phone_from_website'), row_dict.get('other_phone'), 
+            row_dict.get('website'), row_dict.get('instagram_url'), row_dict.get('company_linkedin_url'), 
+            row_dict.get('person_linkedin_url'), row_dict.get('facebook_url'), row_dict.get('twitter_url'), 
+            row_dict.get('pinterest_url'), row_dict.get('city'), row_dict.get('state'), row_dict.get('country'), 
+            row_dict.get('company_city'), row_dict.get('company_state'), row_dict.get('company_country'), 
+            row_dict.get('company_address'), row_dict.get('technologies'), row_dict.get('keywords'), 
+            safe_to_float(row_dict.get('annual_revenue')), safe_to_float(row_dict.get('total_funding')), 
+            row_dict.get('latest_funding'), safe_to_float(row_dict.get('latest_funding_amount')), 
+            row_dict.get('subsidiary_of'), safe_to_int(row_dict.get('number_of_retail_locations')), 
+            row_dict.get('extracted_from'), row_dict.get('website_status'), row_dict.get('d2c_presence'), 
+            row_dict.get('e_commerce_presence'), row_dict.get('social_media_presence'), 
+            row_dict.get('integrated_videos'), row_dict.get('integrated_video_urls'), 
+            row_dict.get('job_tracking_link'), row_dict.get('hiring_job_title'), 
+            row_dict.get('salary_estimated'), row_dict.get('job_location'), row_dict.get('linkedin_job_link'), 
+            row_dict.get('linkedin_job_title'), row_dict.get('job_basedon'), row_dict.get('ig_username'), 
+            row_dict.get('ig_bio'), safe_to_int(row_dict.get('ig_followers_count')), 
+            safe_to_int(row_dict.get('total_post_in_3_months')), safe_to_float(row_dict.get('average_er')), 
+            safe_to_int(row_dict.get('total_collaborations')), row_dict.get('ugc_example'), 
+            row_dict.get('worked_with_creators'), row_dict.get('hashtags'), row_dict.get('mentions'), row_dict.get('LogoUrl'), row_dict.get('short_description'),
+            safe_to_int(row_dict.get('post1_engagement')), safe_to_int(row_dict.get('post2_engagement')), 
+            safe_to_int(row_dict.get('post3_engagement')), safe_to_int(row_dict.get('post4_engagement')), 
+            safe_to_int(row_dict.get('post5_engagement')), safe_to_int(row_dict.get('post6_engagement')), 
+            row_dict.get('segmentation'), safe_to_float(row_dict.get('firmographic_score')), 
+            safe_to_float(row_dict.get('engagement_score')), row_dict.get('mql'), row_dict.get('sql'), 
+            safe_to_float(row_dict.get('ig_score')), row_dict.get('ad_library_proof'), 
+            row_dict.get('notes_for_sdr'), row_dict.get('notes_for_data'), 
+            safe_to_date(row_dict.get('date_of_filtration'))
+        )
+
+    records_to_insert = []
+    records_to_update = []
+    original_row_count = len(df)
+    skipped_no_key = 0
+
+    # Iterate all rows and decide insert vs update
+    for row in df.itertuples(index=False):
+        row_dict = {df.columns[i]: val for i, val in enumerate(row)}
+        email = (row_dict.get('email') or '').strip()
+        company = (row_dict.get('company') or '').strip()
+        
+        # Create composite key from email + company
+        composite_key = f"{email.lower()}_{company.lower()}"
+        if not composite_key or composite_key == "_":
+            skipped_no_key += 1
+            continue
+
+        new_values = build_db_values(row_dict)  # tuple aligned with db_columns
+        
+        # Compare to existing record (if any)
+        existing = existing_data.get(composite_key)
+        if existing is None:
+            # new record -> insert
+            records_to_insert.append(new_values)
+        else:
+            # build a comparable tuple from existing row in same order
+            # existing dict values might be native types; cast both to string for stable comparison
+            changed = False
+            for i, col in enumerate(db_columns):
+                existing_val = existing.get(col)
+                new_val = new_values[i]
+                # Normalize None/NaN and booleans/numbers to string for comparison
+                if existing_val is None and (new_val is None or (isinstance(new_val, float) and pd.isna(new_val))):
+                    continue
+                if str(existing_val) != str(new_val):
+                    changed = True
+                    break
+            if changed:
+                # Prepare update tuple: all columns, then composite key for WHERE
+                # We'll use email and company in WHERE clause
+                update_values = list(new_values)  # all column values
+                update_values.append(email)  # WHERE email=?
+                update_values.append(company)  # AND company=?
+                records_to_update.append(tuple(update_values))
+
+    # --- Perform inserts ---
+    if records_to_insert:
+        print(f"🚀 Inserting {len(records_to_insert)} new records into the database...")
+        insert_placeholders = ", ".join(["?"] * len(db_columns))
+        insert_sql = f"INSERT INTO dbo.brand_staging ({', '.join(db_columns)}) VALUES ({insert_placeholders})"
+        try:
+            cursor.fast_executemany = True
+            cursor.executemany(insert_sql, records_to_insert)
+            conn.commit()
+            print("✅ Insert completed successfully")
+        except Exception as e:
+            print(f"❌ Insert error: {e}")
+            conn.rollback()
+
+    # --- Perform updates ---
+    if records_to_update:
+        print(f"🔁 Updating {len(records_to_update)} changed records in the database...")
+        # Update all columns, use email and company in WHERE clause
+        update_sql = f"UPDATE dbo.brand_staging SET {', '.join([col + '=?' for col in db_columns])} WHERE email = ? AND company = ?"
+        try:
+            cursor.fast_executemany = True
+            cursor.executemany(update_sql, records_to_update)
+            conn.commit()
+            print("✅ Update completed successfully")
+        except Exception as e:
+            print(f"❌ Update error: {e}")
+            conn.rollback()
+
+    cursor.close()
+    conn.close()
+
+    end_time = time.time()
+    inserted = len(records_to_insert)
+    updated = len(records_to_update)
+    print("\n-------------------------------------------")
+    print(f"✅ Import completed in {end_time - start_time:.2f} seconds.")
+    print(f"   New Records Inserted: {inserted}")
+    print(f"   Existing Records Updated: {updated}")
+    print(f"   Rows Skipped (no email/company): {skipped_no_key}")
+    print(f"   Existing Records Unchanged: {original_row_count - inserted - updated - skipped_no_key}")
+    print("-------------------------------------------")
+
+def validate_brand_csv_structure(csv_file_path):
+    """
+    Validate brand CSV structure before import
+    """
+    print("Validating CSV structure...")
+    df = pd.read_csv(csv_file_path, nrows=5, dtype=str, keep_default_na=False)
+    df.columns = [clean_column_name(col) for col in df.columns]
+    
+    # Expected columns for brand_staging table
+    expected_columns = [
+        'company', 'company_name_for_emails', 'first_name', 'last_name', 'seniority','LogoUrl','short_description',
+        'departments', 'title', 'email', 'secondary_email', 'email_from_website',
+        'industry', 'industry_corrected', 'employees', 'work_direct_phone', 'home_phone',
+        'mobile_phone', 'corporate_phone', 'company_phone', 'phone_from_website',
+        'other_phone', 'website', 'instagram_url', 'company_linkedin_url',
+        'person_linkedin_url', 'facebook_url', 'twitter_url', 'pinterest_url', 'city',
+        'state', 'country', 'company_city', 'company_state', 'company_country',
+        'company_address', 'technologies', 'keywords', 'annual_revenue', 'total_funding',
+        'latest_funding', 'latest_funding_amount', 'subsidiary_of',
+        'number_of_retail_locations', 'extracted_from', 'website_status', 'd2c_presence',
+        'e_commerce_presence', 'social_media_presence', 'integrated_videos',
+        'integrated_video_urls', 'job_tracking_link', 'hiring_job_title',
+        'salary_estimated', 'job_location', 'linkedin_job_link', 'linkedin_job_title',
+        'job_basedon', 'ig_username', 'ig_bio', 'ig_followers_count',
+        'total_post_in_3_months', 'average_er', 'total_collaborations', 'ugc_example',
+        'worked_with_creators', 'hashtags', 'mentions', 'post1_engagement',
+        'post2_engagement', 'post3_engagement', 'post4_engagement', 'post5_engagement',
+        'post6_engagement', 'segmentation', 'firmographic_score', 'engagement_score',
+        'mql', 'sql', 'ig_score', 'ad_library_proof', 'notes_for_sdr', 'notes_for_data',
+        'date_of_filtration'
+    ]
+    
+    # Check for missing columns
+    missing_columns = set(expected_columns) - set(df.columns)
+    if missing_columns:
+        print(f"Warning: CSV is missing these columns: {missing_columns}")
+    
+    # Check for extra columns
+    extra_columns = set(df.columns) - set(expected_columns)
+    if extra_columns:
+        print(f"Warning: CSV has extra columns that will be ignored: {extra_columns}")
+    
+    return list(df.columns)
+
+# Run the main import function
+if __name__ == "__main__":
+    # Validate CSV structure first
+    csv_path = r"\apparel&fashionusbased ' - apparel&fashionusbased '.csv"
+    csv_columns = validate_brand_csv_structure(csv_path)
+    
+    # Ask for confirmation to proceed
+    proceed = input("\nProceed with import? (y/n): ")
+    if proceed.lower() == 'y':
+        fast_import_brand_data()
+    else:
+        print("Import cancelled.")
