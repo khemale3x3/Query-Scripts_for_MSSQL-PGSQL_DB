@@ -1,0 +1,171 @@
+-- Main creators table
+CREATE TABLE IF NOT EXISTS creators_info (
+    creator_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email TEXT NOT NULL UNIQUE,
+    username TEXT NOT NULL,
+    first_name TEXT,
+    last_name TEXT,
+    full_name TEXT,
+    phone_number TEXT,
+    staging_timestamp TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    is_veel_creator BOOLEAN DEFAULT FALSE
+);
+
+-- Creator profiles table
+CREATE TABLE IF NOT EXISTS creator_profiles (
+    profile_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    creator_id UUID REFERENCES creators_info(creator_id) ON DELETE CASCADE,
+    age_group TEXT,
+    age NUMERIC(4,1),
+    gender TEXT,
+    creator_size TEXT,
+    business_category TEXT,
+    bio_data TEXT,
+    address_city TEXT,
+    address_state TEXT,
+    address_country TEXT,
+    address_zip TEXT,
+    latitude NUMERIC(8,5),
+    longitude NUMERIC(8,5),
+    street_address TEXT,
+    full_address TEXT,
+    profile_completion_status NUMERIC(8,5),
+    category_id TEXT,
+    status TEXT,
+    last_updated DATE,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Creator social links table
+CREATE TABLE IF NOT EXISTS creator_social_links (
+    social_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    creator_id UUID REFERENCES creators_info(creator_id) ON DELETE CASCADE,
+    primary_social_link TEXT,
+    tiktok_link TEXT,
+    youtube_link TEXT,
+    facebook_link TEXT,
+    pinterest_link TEXT,
+    linktree_link TEXT,
+    other_social_media TEXT,
+    platform_profile_link TEXT,
+    profile_picture TEXT,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Creator pricing table
+CREATE TABLE IF NOT EXISTS creator_pricing (
+    pricing_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    creator_id UUID REFERENCES creators_info(creator_id) ON DELETE CASCADE,
+    tier TEXT,
+    price_usd NUMERIC(10,2),
+    price_range TEXT,
+    estimated_roi NUMERIC(5,2),
+    time_15_seconds numeric,
+    time_30_seconds numeric,
+    time_60_seconds numeric,
+    time_1_to_5_minutes numeric,
+    time_greater_than_5_minutes numeric,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Creator engagement table
+CREATE TABLE IF NOT EXISTS creator_engagement (
+    engagement_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    creator_id UUID REFERENCES creators_info(creator_id) ON DELETE CASCADE,
+    follower_count BIGINT,
+    impressions_visibility TEXT,
+    post1_engagement numeric,
+    post2_engagement numeric,
+    post3_engagement numeric,
+    post4_engagement numeric,
+    post5_engagement numeric,
+    post6_engagement numeric,
+    total_posts_last_3_months numeric,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Creator collaborations table
+CREATE TABLE IF NOT EXISTS creator_collaborations (
+    collaboration_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    creator_id UUID REFERENCES creators_info(creator_id) ON DELETE CASCADE,
+    collaboration_status TEXT,
+    top_collaboration TEXT,
+    top_collaboration_brand_logo TEXT,
+    total_collaboration numeric,
+    no_of_collaboration_3_months numeric,
+    ugc_video_example TEXT,
+    hashtags TEXT,
+    mention TEXT,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Creator metadata table
+CREATE TABLE IF NOT EXISTS creator_metadata (
+    metadata_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    creator_id UUID REFERENCES creators_info(creator_id) ON DELETE CASCADE,
+    creator_type TEXT,
+    niche TEXT,
+    niche_primary TEXT,
+    niche_secondary TEXT,
+    source TEXT,
+    notes TEXT,
+    extra_data JSONB,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Creator scoring table (for additional scoring metrics)
+CREATE TABLE IF NOT EXISTS creator_scoring (
+    score_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    creator_id UUID REFERENCES creators_info(creator_id) ON DELETE CASCADE,
+    ig_score NUMERIC(5,2),
+    er_percentage NUMERIC(5,2),
+    er_points_3_months NUMERIC(5,2),
+    follower_points numeric,
+    collaboration_points numeric,
+    niche_point numeric,
+    posting_frequency_points numeric,
+    short_form_video_platform_point numeric,
+    total_points numeric,
+    score_tier TEXT,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+
+
+-- Triggers to automatically update the updated_at column
+CREATE TRIGGER update_creator_profiles_updated_at 
+    BEFORE UPDATE ON creator_profiles 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_creator_social_links_updated_at 
+    BEFORE UPDATE ON creator_social_links 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_creator_pricing_updated_at 
+    BEFORE UPDATE ON creator_pricing 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_creator_engagement_updated_at 
+    BEFORE UPDATE ON creator_engagement 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_creator_collaborations_updated_at 
+    BEFORE UPDATE ON creator_collaborations 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_creator_metadata_updated_at 
+    BEFORE UPDATE ON creator_metadata 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_creator_scoring_updated_at 
+    BEFORE UPDATE ON creator_scoring 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    
+    
