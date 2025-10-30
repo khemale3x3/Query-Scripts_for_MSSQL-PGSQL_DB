@@ -1,0 +1,110 @@
+/****** Object:  Table [dbo].[brand_staging]    Script Date: 10/30/2025 10:14:35 PM ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE TABLE [dbo].[brand_staging](
+	[staging_timestamp] [datetimeoffset](7) NULL,
+	[inserted_date] [date] NULL,
+	[inserted_time] [time](0) NULL,
+	[company] [nvarchar](max) NULL,
+	[company_name_for_emails] [nvarchar](max) NULL,
+	[first_name] [nvarchar](max) NULL,
+	[last_name] [nvarchar](max) NULL,
+	[seniority] [nvarchar](max) NULL,
+	[departments] [nvarchar](max) NULL,
+	[title] [nvarchar](max) NULL,
+	[email] [nvarchar](max) NULL,
+	[secondary_email] [nvarchar](max) NULL,
+	[email_from_website] [nvarchar](max) NULL,
+	[industry] [nvarchar](max) NULL,
+	[industry_corrected] [nvarchar](max) NULL,
+	[employees] [nvarchar](max) NULL,
+	[work_direct_phone] [nvarchar](max) NULL,
+	[home_phone] [nvarchar](max) NULL,
+	[mobile_phone] [nvarchar](max) NULL,
+	[corporate_phone] [nvarchar](max) NULL,
+	[company_phone] [nvarchar](max) NULL,
+	[phone_from_website] [nvarchar](max) NULL,
+	[other_phone] [nvarchar](max) NULL,
+	[website] [nvarchar](max) NULL,
+	[instagram_url] [nvarchar](max) NULL,
+	[company_linkedin_url] [nvarchar](max) NULL,
+	[person_linkedin_url] [nvarchar](max) NULL,
+	[facebook_url] [nvarchar](max) NULL,
+	[twitter_url] [nvarchar](max) NULL,
+	[pinterest_url] [nvarchar](max) NULL,
+	[city] [nvarchar](max) NULL,
+	[state] [nvarchar](max) NULL,
+	[country] [nvarchar](max) NULL,
+	[company_city] [nvarchar](max) NULL,
+	[company_state] [nvarchar](max) NULL,
+	[company_country] [nvarchar](max) NULL,
+	[company_address] [nvarchar](max) NULL,
+	[technologies] [nvarchar](max) NULL,
+	[keywords] [nvarchar](max) NULL,
+	[annual_revenue] [nvarchar](max) NULL,
+	[total_funding] [nvarchar](max) NULL,
+	[latest_funding] [nvarchar](max) NULL,
+	[latest_funding_amount] [nvarchar](max) NULL,
+	[subsidiary_of] [nvarchar](max) NULL,
+	[number_of_retail_locations] [nvarchar](max) NULL,
+	[extracted_from] [nvarchar](max) NULL,
+	[website_status] [nvarchar](max) NULL,
+	[d2c_presence] [nvarchar](max) NULL,
+	[e_commerce_presence] [nvarchar](max) NULL,
+	[social_media_presence] [nvarchar](max) NULL,
+	[integrated_videos] [nvarchar](max) NULL,
+	[integrated_video_urls] [nvarchar](max) NULL,
+	[job_tracking_link] [nvarchar](max) NULL,
+	[hiring_job_title] [nvarchar](max) NULL,
+	[salary_estimated] [nvarchar](max) NULL,
+	[job_location] [nvarchar](max) NULL,
+	[linkedin_job_link] [nvarchar](max) NULL,
+	[linkedin_job_title] [nvarchar](max) NULL,
+	[job_basedon] [nvarchar](max) NULL,
+	[ig_username] [nvarchar](max) NULL,
+	[ig_bio] [nvarchar](max) NULL,
+	[ig_followers_count] [nvarchar](max) NULL,
+	[total_post_in_3_months] [nvarchar](max) NULL,
+	[average_er] [nvarchar](max) NULL,
+	[total_collaborations] [nvarchar](max) NULL,
+	[ugc_example] [nvarchar](max) NULL,
+	[worked_with_creators] [nvarchar](max) NULL,
+	[hashtags] [nvarchar](max) NULL,
+	[mentions] [nvarchar](max) NULL,
+	[post1_engagement] [nvarchar](max) NULL,
+	[post2_engagement] [nvarchar](max) NULL,
+	[post3_engagement] [nvarchar](max) NULL,
+	[post4_engagement] [nvarchar](max) NULL,
+	[post5_engagement] [nvarchar](max) NULL,
+	[post6_engagement] [nvarchar](max) NULL,
+	[segmentation] [nvarchar](max) NULL,
+	[firmographic_score] [nvarchar](max) NULL,
+	[engagement_score] [nvarchar](max) NULL,
+	[mql] [nvarchar](max) NULL,
+	[sql] [nvarchar](max) NULL,
+	[ig_score] [nvarchar](max) NULL,
+	[ad_library_proof] [nvarchar](max) NULL,
+	[notes_for_sdr] [nvarchar](max) NULL,
+	[notes_for_data] [nvarchar](max) NULL,
+	[date_of_filtration] [nvarchar](max) NULL,
+	[extra_data] [nvarchar](max) NULL,
+	[short_description] [nvarchar](500) NULL,
+	[LogoUrl] [nvarchar](255) NULL
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+
+ALTER TABLE [dbo].[brand_staging] ADD  DEFAULT (sysdatetimeoffset()) FOR [staging_timestamp]
+GO
+
+ALTER TABLE [dbo].[brand_staging] ADD  DEFAULT (CONVERT([date],getdate())) FOR [inserted_date]
+GO
+
+ALTER TABLE [dbo].[brand_staging] ADD  DEFAULT (CONVERT([time](0),getdate())) FOR [inserted_time]
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'Staging table for brand data import with inserted date and time tracking' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'brand_staging'
+GO
